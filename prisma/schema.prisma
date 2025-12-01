@@ -7,18 +7,172 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
-  posts Post[]
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-model Post {
-  id        Int     @id @default(autoincrement())
-  title     String
-  content   String?
-  published Boolean @default(false)
-  authorId  Int
-  author    User    @relation(fields: [authorId], references: [id])
+generator client {
+  provider = "prisma-client-js"
+}
+
+/* ───────────────────────────────────────────
+   ADMIN (For Dashboard Control)
+──────────────────────────────────────────── */
+model Admin {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // hashed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logs      Log[]
+}
+
+
+/* ───────────────────────────────────────────
+   ELECTION
+──────────────────────────────────────────── */
+model Election {
+  id        String      @id @default(uuid())
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  timezone  String         @default("UTC")
+  status    ElectionStatus @default(NOT_STARTED)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  candidates Candidate[]
+  voters      VoterInElection[]
+  multiKeys   MultiKey[]
+  votes       Vote[]
+  logs        Log[]
+}
+
+enum ElectionStatus {
+  NOT_STARTED
+  LIVE
+  COMPLETED
+}
+
+
+/* ───────────────────────────────────────────
+   VOTER (Single Profile)
+──────────────────────────────────────────── */
+model Voter {
+  id            String   @id @default(uuid())
+  name          String
+  email         String?  @unique
+  registration  String   @unique
+  otp           String?  // hashed
+  otpExpiry     DateTime?
+  lastLoginAt   DateTime?
+  hasVoted      Boolean  @default(false)
+  votedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  elections     VoterInElection[]
+  votes         Vote[]
+}
+
+
+/* ───────────────────────────────────────────
+   VOTER <-> ELECTION Relation Table
+──────────────────────────────────────────── */
+model VoterInElection {
+  id          String   @id @default(uuid())
+  voterId     String
+  electionId  String
+  hasVoted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  voter    Voter    @relation(fields: [voterId], references: [id])
+  election Election @relation(fields: [electionId], references: [id])
+
+  @@unique([voterId, electionId])
+}
+
+
+/* ───────────────────────────────────────────
+   CANDIDATE
+──────────────────────────────────────────── */
+model Candidate {
+  id         String   @id @default(uuid())
+  name       String
+  party      String?
+  electionId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  election Election @relation(fields: [electionId], references: [id])
+  votes    Vote[]
+}
+
+
+/* ───────────────────────────────────────────
+   VOTES (Hidden until election ends)
+──────────────────────────────────────────── */
+model Vote {
+  id          String   @id @default(uuid())
+  voterId     String
+  candidateId String
+  electionId  String
+  createdAt   DateTime @default(now())
+
+  voter     Voter     @relation(fields: [voterId], references: [id])
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  election  Election  @relation(fields: [electionId], references: [id])
+
+  @@unique([voterId, electionId]) // prevent double voting
+}
+
+
+/* ───────────────────────────────────────────
+   MULTI-KEY SECURITY
+──────────────────────────────────────────── */
+model MultiKey {
+  id         String   @id @default(uuid())
+  electionId String
+  adminId    String?
+  keyValue   String
+  status     KeyStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+
+  election Election @relation(fields: [electionId], references: [id])
+  admin    Admin?   @relation(fields: [adminId], references: [id])
+}
+
+enum KeyStatus {
+  PENDING
+  PROVIDED
+}
+
+
+/* ───────────────────────────────────────────
+   ACTIVITY LOGS (Dashboard)
+──────────────────────────────────────────── */
+model Log {
+  id          String   @id @default(uuid())
+  action      String
+  adminId     String?
+  electionId  String?
+  createdAt   DateTime @default(now())
+
+  admin    Admin?   @relation(fields: [adminId], references: [id])
+  election Election? @relation(fields: [electionId], references: [id])
+}
+
+/* ───────────────────────────────────────────
+   MESSAGES (Broadcasts)
+──────────────────────────────────────────── */
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  sentAt    DateTime @default(now())
+  adminId   String?
+
+  admin     Admin?   @relation(fields: [adminId], references: [id])
 }
