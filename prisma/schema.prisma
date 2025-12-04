@@ -1,19 +1,10 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../app/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-generator client {
-  provider = "prisma-client-js"
 }
 
 /* ───────────────────────────────────────────
@@ -28,6 +19,8 @@ model Admin {
   updatedAt DateTime @updatedAt
 
   logs      Log[]
+  multiKeys MultiKey[]
+  messages  Message[]
 }
 
 

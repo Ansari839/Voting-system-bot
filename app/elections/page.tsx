@@ -74,6 +74,8 @@ const data: Election[] = [
 ]
 
 export default function ElectionsPage() {
+    const [data, setData] = React.useState<Election[]>([])
+    const [loading, setLoading] = React.useState(true)
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -82,15 +84,50 @@ export default function ElectionsPage() {
     const [isMultiKeyOpen, setIsMultiKeyOpen] = React.useState(false)
     const [selectedAction, setSelectedAction] = React.useState<{ type: string; id: string } | null>(null)
 
+    React.useEffect(() => {
+        fetchElections();
+    }, []);
+
+    const fetchElections = async () => {
+        try {
+            const response = await fetch('/api/admin/elections');
+            const result = await response.json();
+            if (result.success) {
+                // Map backend data to frontend model if necessary, or ensure backend matches
+                // Backend returns: id, name, startDate, endDate, status, votersCount (added in service)
+                // Frontend expects: id, name, status, startDate, endDate, votersCount
+                // Dates might need formatting
+                const formattedData = result.data.map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                    status: e.status === 'NOT_STARTED' ? 'draft' : e.status === 'LIVE' ? 'active' : e.status === 'COMPLETED' ? 'completed' : 'paused',
+                    startDate: e.startDate ? new Date(e.startDate).toISOString().split('T')[0] : 'N/A',
+                    endDate: e.endDate ? new Date(e.endDate).toISOString().split('T')[0] : 'N/A',
+                    votersCount: e.votersCount || 0
+                }));
+                setData(formattedData);
+            }
+        } catch (error) {
+            console.error("Failed to fetch elections", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleAction = (type: string, id: string) => {
         setSelectedAction({ type, id })
         setIsMultiKeyOpen(true)
     }
 
-    const confirmAction = () => {
+    const confirmAction = async () => {
         console.log("Action confirmed:", selectedAction)
         // Implement actual logic here
+        // For example call stop election API
+        if (selectedAction?.type === "Stop Election") {
+            // Logic to stop election would go here, likely needing another modal for keys if not handled by MultiKeyModal
+        }
         setIsMultiKeyOpen(false)
+        fetchElections(); // Refresh data
     }
 
     const columns: ColumnDef<Election>[] = [
@@ -130,6 +167,11 @@ export default function ElectionsPage() {
             accessorKey: "endDate",
             header: "End Date",
             cell: ({ row }) => <div>{row.getValue("endDate")}</div>,
+        },
+        {
+            accessorKey: "votersCount",
+            header: "Voters",
+            cell: ({ row }) => <div>{row.getValue("votersCount")}</div>,
         },
         {
             id: "actions",
@@ -197,7 +239,7 @@ export default function ElectionsPage() {
                     }
                     className="max-w-sm"
                 />
-                <CreateElectionDialog>
+                <CreateElectionDialog onElectionCreated={fetchElections}>
                     <Button>
                         <Plus className="mr-2 h-4 w-4" /> Create Election
                     </Button>
@@ -246,7 +288,7 @@ export default function ElectionsPage() {
                                     colSpan={columns.length}
                                     className="h-24 text-center"
                                 >
-                                    No results.
+                                    {loading ? "Loading..." : "No results."}
                                 </TableCell>
                             </TableRow>
                         )}

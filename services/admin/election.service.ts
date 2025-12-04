@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma';
+import prisma from '../../lib/prisma';
 import { z } from 'zod';
 import { LogService } from './log.service';
 
@@ -190,8 +190,18 @@ export const ElectionService = {
     },
 
     async getAllElections() {
-        return await prisma.election.findMany({
-            orderBy: { createdAt: 'desc' }
+        const elections = await prisma.election.findMany({
+            orderBy: { createdAt: 'desc' },
+            include: {
+                _count: {
+                    select: { voters: true }
+                }
+            }
         });
+
+        return elections.map(election => ({
+            ...election,
+            votersCount: election._count.voters
+        }));
     }
 };
